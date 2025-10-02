@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8" />
 <meta name="viewport" content="width=device-width,initial-scale=1" />
-<title>megasena</title>
+<title>Coleta de 6 Números</title>
 <style>
   body { font-family: Arial,Helvetica,sans-serif; margin:16px; background:#f5f6f8; color:#222 }
   h1 { font-size:1.2rem; margin-bottom:8px }
@@ -23,7 +23,7 @@
 </head>
 <body>
   <h1>Preencha 6 números (1–60)</h1>
-  <p class="small">Escolha uma linha e coloque 6 números (sem repetição nessa linha). Em seguida, pressione <strong>Enviar</strong>. Estes dados ficam salvos na planilha do responsável e aparecerão abaixo para todos verem.</p>
+  <p class="small">Escolha uma linha e coloque 6 números (sem repetição nessa linha). Em seguida, pressione <strong>Enviar</strong>. Estes dados ficam salvos na planilha e aparecem abaixo.</p>
 
   <div id="matrix" class="grid"></div>
 
@@ -36,12 +36,10 @@
   <div class="message" id="status"></div>
 
   <h2 style="margin-top:18px">Conjuntos já enviados</h2>
-  <div class="saved" id="savedList">
-    Carregando...
-  </div>
+  <div class="saved" id="savedList">Carregando...</div>
 
 <script>
-const GOOGLE_SCRIPT_URL = "https://proxy-numeros.fernando-garibaldi.workers.dev/"; // <-- substitua por sua URL do Web App (ex: https://script.google.com/macros/s/XXX/exec)
+const GOOGLE_SCRIPT_URL = "https://proxy-numeros.fernando-garibaldi.workers.dev/"; // <-- substitua pela URL do Worker (ex: https://proxy-numeros.xyz.workers.dev)
 
 const matrix = document.getElementById('matrix');
 const savedList = document.getElementById('savedList');
@@ -61,7 +59,6 @@ for (let r=0;r<10;r++) {
     inp.placeholder = (c+1);
     inp.dataset.col = c;
     inp.addEventListener('input', () => {
-      // limitar valores
       if (inp.value) {
         let v = Math.floor(Number(inp.value));
         if (isNaN(v)) v = "";
@@ -74,19 +71,15 @@ for (let r=0;r<10;r++) {
     });
     div.appendChild(inp);
   }
-  // botão selecionar linha
   const btnSel = document.createElement('button');
   btnSel.textContent = 'Selecionar';
   btnSel.type = 'button';
   btnSel.style.marginLeft = '8px';
-  btnSel.addEventListener('click', () => {
-    selectRow(r);
-  });
+  btnSel.addEventListener('click', () => selectRow(r));
   div.appendChild(btnSel);
   matrix.appendChild(div);
 }
 
-// seleciona linha visualmente
 function selectRow(idx) {
   selectedRowIndex = idx;
   document.querySelectorAll('.row').forEach((el,i)=>{
@@ -96,7 +89,6 @@ function selectRow(idx) {
   });
 }
 
-// pegar valores da linha selecionada
 function getSelectedNumbers() {
   const row = document.querySelector(`.row[data-row="${selectedRowIndex}"]`);
   const inputs = Array.from(row.querySelectorAll('input'));
@@ -104,38 +96,32 @@ function getSelectedNumbers() {
   return { inputs, values };
 }
 
-// validar
 function validateNumbers(nums) {
   if (nums.length !== 6) return "Preencha exatamente 6 números nessa linha.";
   for (let n of nums) {
     if (!Number.isInteger(n) || n < 1 || n > 60) return "Números devem ser inteiros entre 1 e 60.";
   }
-  // verificar repetidos
   const set = new Set(nums);
   if (set.size !== nums.length) return "Não pode haver números repetidos na mesma linha.";
   return null;
 }
 
-// enviar para Google Script
 async function postNumbers(nums) {
   try {
     setStatus("Enviando...");
     const res = await fetch(GOOGLE_SCRIPT_URL, {
-  method: 'POST',
-  // mode: 'no-cors',  // adiciona isso
-  headers: {'Content-Type':'application/json'},
-  body: JSON.stringify({numbers: nums})
-});
-
+      method: 'POST',
+      headers: {'Content-Type':'application/json'},
+      body: JSON.stringify({numbers: nums})
+    });
     const j = await res.json();
-    if (j.success) {
+    if (j && j.success) {
       setStatus("Enviado com sucesso.", 'ok');
-      // limpar inputs da linha
       const {inputs} = getSelectedNumbers();
       inputs.forEach(i => i.value = '');
       loadSaved();
     } else {
-      setStatus("Erro: " + (j.error || 'resposta inesperada'));
+      setStatus("Erro: " + (j && j.error ? j.error : 'resposta inesperada'));
     }
   } catch (err) {
     setStatus("Erro de rede: " + err.message);
@@ -147,14 +133,10 @@ function setStatus(txt, type){
   status.style.color = type === 'ok' ? 'green' : '#333';
 }
 
-// botões
 document.getElementById('sendSelected').addEventListener('click', ()=>{
   const {values} = getSelectedNumbers();
   const err = validateNumbers(values);
-  if (err) {
-    setStatus(err);
-    return;
-  }
+  if (err) { setStatus(err); return; }
   postNumbers(values);
 });
 document.getElementById('clearRow').addEventListener('click', ()=>{
@@ -163,13 +145,12 @@ document.getElementById('clearRow').addEventListener('click', ()=>{
 });
 document.getElementById('refresh').addEventListener('click', loadSaved);
 
-// carregar já salvos via GET
 async function loadSaved() {
   savedList.innerHTML = 'Carregando...';
   try {
-    const res = await fetch(GOOGLE_SCRIPT_URL);
+    const res = await fetch(GOOGLE_SCRIPT_URL, { method: 'GET' });
     const j = await res.json();
-    if (j.success) {
+    if (j && j.success) {
       const rows = j.rows || [];
       if (rows.length === 0) {
         savedList.innerHTML = '<div class="small">Nenhum conjunto enviado ainda.</div>';
@@ -179,19 +160,19 @@ async function loadSaved() {
       rows.forEach(r=>{
         const d = document.createElement('div');
         d.className = 'entry';
-        const ts = new Date(r.timestamp).toLocaleString();
-        d.innerHTML = `<div><strong>${r.numbers ? r.numbers.join(' - ') : (r.numbers || '').toString()}</strong></div><div class="small">${ts}</div>`;
+        const ts = r.timestamp ? new Date(r.timestamp).toLocaleString() : '';
+        const nums = Array.isArray(r.numbers) ? r.numbers.map(n => n === null ? '-' : n).join(' - ') : '';
+        d.innerHTML = `<div><strong>${nums}</strong></div><div class="small">${ts}</div>`;
         savedList.appendChild(d);
       });
     } else {
-      savedList.innerHTML = '<div class="small">Erro ao carregar: ' + (j.error || 'resposta inválida') + '</div>';
+      savedList.innerHTML = '<div class="small">Erro ao carregar: ' + (j && j.error ? j.error : 'resposta inválida') + '</div>';
     }
   } catch (err) {
     savedList.innerHTML = '<div class="small">Erro de rede: ' + err.message + '</div>';
   }
 }
 
-// inicialização
 selectRow(0);
 loadSaved();
 </script>
