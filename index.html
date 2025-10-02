@@ -41,7 +41,7 @@
   </div>
 
 <script>
-const GOOGLE_SCRIPT_URL = "https://script.google.com/macros/s/AKfycby8pyJ3rvIDSPrzTAEexb0ehjsHhm-h0QteqcanIOn-u-Mnc9RkWhjWjRScn1uZ6kM5/exec"; // <-- substitua por sua URL do Web App (ex: https://script.google.com/macros/s/XXX/exec)
+const GOOGLE_SCRIPT_URL = "https://proxy-numeros.fernando-garibaldi.workers.dev/"; // <-- substitua por sua URL do Web App (ex: https://script.google.com/macros/s/XXX/exec)
 
 const matrix = document.getElementById('matrix');
 const savedList = document.getElementById('savedList');
@@ -122,7 +122,7 @@ async function postNumbers(nums) {
     setStatus("Enviando...");
     const res = await fetch(GOOGLE_SCRIPT_URL, {
   method: 'POST',
-  mode: 'no-cors',  // 👈 adiciona isso
+  // mode: 'no-cors',  // adiciona isso
   headers: {'Content-Type':'application/json'},
   body: JSON.stringify({numbers: nums})
 });
