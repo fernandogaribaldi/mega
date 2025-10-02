@@ -3,33 +3,32 @@
 <head>
 <meta charset="utf-8" />
 <meta name="viewport" content="width=device-width,initial-scale=1" />
-<title>Coleta de 6 Números</title>
+<title>Escolha seus 6 números</title>
 <style>
-  body { font-family: Arial,Helvetica,sans-serif; margin:16px; background:#f5f6f8; color:#222 }
-  h1 { font-size:1.2rem; margin-bottom:8px }
-  .grid { display:grid; gap:6px; margin-bottom:12px }
-  .row { display:flex; gap:6px; align-items:center }
-  input[type=number] { width:48px; padding:6px; border-radius:6px; border:1px solid #ccc; text-align:center }
-  button { padding:8px 12px; border-radius:8px; border:0; background:#0b5cff; color:#fff; cursor:pointer }
-  button.secondary { background:#666 }
+  body { font-family: Arial, sans-serif; margin:16px; background:#f5f6f8; color:#222 }
+  h1 { font-size:1.3rem; margin-bottom:12px }
+  .grid { display:grid; grid-template-columns: repeat(10, 1fr); gap:6px; max-width:480px; margin-bottom:16px }
+  .num-btn {
+    padding:10px; border:1px solid #aaa; border-radius:6px; background:#fff; cursor:pointer;
+    font-size:1rem; text-align:center; user-select:none;
+  }
+  .num-btn.selected { background:#0b5cff; color:#fff; border-color:#0b5cff }
+  button { padding:10px 16px; border-radius:8px; border:0; cursor:pointer; margin:4px 4px 0 0 }
+  button.send { background:#0b5cff; color:#fff }
+  button.secondary { background:#666; color:#fff }
   .saved { margin-top:18px; padding:12px; background:#fff; border-radius:8px; min-height:60px; color:#000 }
   .entry { padding:6px 0; border-bottom:1px solid #eee }
   .small { font-size:0.85rem; color:#444 }
   .message { margin-top:8px; font-size:0.95rem }
-  @media (max-width:420px){
-    input[type=number]{ width:42px; padding:8px }
-  }
 </style>
 </head>
 <body>
-  <h1>Preencha 6 números (1–60)</h1>
-  <p class="small">Escolha uma linha e coloque 6 números (sem repetição nessa linha). Em seguida, pressione <strong>Enviar</strong>. Estes dados ficam salvos na planilha e aparecem abaixo.</p>
-
+  <h1>Escolha 6 números (1–60)</h1>
   <div id="matrix" class="grid"></div>
 
-  <div style="display:flex;gap:8px;flex-wrap:wrap">
-    <button id="sendSelected">Enviar linha selecionada</button>
-    <button id="clearRow" class="secondary">Limpar linha selecionada</button>
+  <div>
+    <button id="send" class="send">Enviar</button>
+    <button id="clear" class="secondary">Limpar seleção</button>
     <button id="refresh" class="secondary">Atualizar lista</button>
   </div>
 
@@ -39,70 +38,50 @@
   <div class="saved" id="savedList">Carregando...</div>
 
 <script>
-const GOOGLE_SCRIPT_URL = "https://proxy-numeros.fernando-garibaldi.workers.dev/"; // <-- substitua pela URL do Worker (ex: https://proxy-numeros.xyz.workers.dev)
+const GOOGLE_SCRIPT_URL = "https://proxy-numeros.fernando-garibaldi.workers.dev/"; //
 
 const matrix = document.getElementById('matrix');
 const savedList = document.getElementById('savedList');
 const status = document.getElementById('status');
 
-let selectedRowIndex = 0;
-
-// criar 10 linhas com 6 inputs
-for (let r=0;r<10;r++) {
-  const div = document.createElement('div');
-  div.className = 'row';
-  div.dataset.row = r;
-  for (let c=0;c<6;c++) {
-    const inp = document.createElement('input');
-    inp.type = 'number';
-    inp.min = 1; inp.max = 60;
-    inp.placeholder = (c+1);
-    inp.dataset.col = c;
-    inp.addEventListener('input', () => {
-      if (inp.value) {
-        let v = Math.floor(Number(inp.value));
-        if (isNaN(v)) v = "";
-        if (v !== "") {
-          if (v < 1) v = 1;
-          if (v > 60) v = 60;
-          inp.value = v;
-        }
-      }
-    });
-    div.appendChild(inp);
-  }
-  const btnSel = document.createElement('button');
-  btnSel.textContent = 'Selecionar';
-  btnSel.type = 'button';
-  btnSel.style.marginLeft = '8px';
-  btnSel.addEventListener('click', () => selectRow(r));
-  div.appendChild(btnSel);
-  matrix.appendChild(div);
+// Criar botões de 1 a 60
+for (let n=1; n<=60; n++) {
+  const btn = document.createElement('div');
+  btn.textContent = n;
+  btn.className = 'num-btn';
+  btn.dataset.num = n;
+  btn.addEventListener('click', ()=>{
+    btn.classList.toggle('selected');
+    enforceMaxSelection();
+  });
+  matrix.appendChild(btn);
 }
 
-function selectRow(idx) {
-  selectedRowIndex = idx;
-  document.querySelectorAll('.row').forEach((el,i)=>{
-    el.style.background = (i===idx) ? '#e8f0ff' : 'transparent';
-    el.style.padding = (i===idx) ? '8px' : '';
-    el.style.borderRadius = (i===idx) ? '8px' : '';
-  });
+// Garante no máximo 6 selecionados
+function enforceMaxSelection() {
+  const selected = getSelectedNumbers();
+  if (selected.length > 6) {
+    // desmarca o último clicado
+    const last = document.querySelector('.num-btn.selected:last-of-type');
+    if (last) last.classList.remove('selected');
+    setStatus("Você só pode escolher 6 números.");
+  } else {
+    setStatus("");
+  }
 }
 
 function getSelectedNumbers() {
-  const row = document.querySelector(`.row[data-row="${selectedRowIndex}"]`);
-  const inputs = Array.from(row.querySelectorAll('input'));
-  const values = inputs.map(i => i.value.trim()).filter(v => v !== "").map(v => Number(v));
-  return { inputs, values };
+  return Array.from(document.querySelectorAll('.num-btn.selected')).map(b=>Number(b.dataset.num));
+}
+
+function clearSelection() {
+  document.querySelectorAll('.num-btn').forEach(b=>b.classList.remove('selected'));
 }
 
 function validateNumbers(nums) {
-  if (nums.length !== 6) return "Preencha exatamente 6 números nessa linha.";
-  for (let n of nums) {
-    if (!Number.isInteger(n) || n < 1 || n > 60) return "Números devem ser inteiros entre 1 e 60.";
-  }
+  if (nums.length !== 6) return "Escolha exatamente 6 números.";
   const set = new Set(nums);
-  if (set.size !== nums.length) return "Não pode haver números repetidos na mesma linha.";
+  if (set.size !== nums.length) return "Números repetidos não são permitidos.";
   return null;
 }
 
@@ -116,9 +95,8 @@ async function postNumbers(nums) {
     });
     const j = await res.json();
     if (j && j.success) {
-      setStatus("Enviado com sucesso.", 'ok');
-      const {inputs} = getSelectedNumbers();
-      inputs.forEach(i => i.value = '');
+      setStatus("Enviado com sucesso!", 'ok');
+      clearSelection();
       loadSaved();
     } else {
       setStatus("Erro: " + (j && j.error ? j.error : 'resposta inesperada'));
@@ -133,16 +111,14 @@ function setStatus(txt, type){
   status.style.color = type === 'ok' ? 'green' : '#333';
 }
 
-document.getElementById('sendSelected').addEventListener('click', ()=>{
-  const {values} = getSelectedNumbers();
-  const err = validateNumbers(values);
+document.getElementById('send').addEventListener('click', ()=>{
+  const nums = getSelectedNumbers();
+  const err = validateNumbers(nums);
   if (err) { setStatus(err); return; }
-  postNumbers(values);
+  postNumbers(nums);
 });
-document.getElementById('clearRow').addEventListener('click', ()=>{
-  const {inputs} = getSelectedNumbers();
-  inputs.forEach(i=>i.value='');
-});
+
+document.getElementById('clear').addEventListener('click', clearSelection);
 document.getElementById('refresh').addEventListener('click', loadSaved);
 
 async function loadSaved() {
@@ -161,7 +137,7 @@ async function loadSaved() {
         const d = document.createElement('div');
         d.className = 'entry';
         const ts = r.timestamp ? new Date(r.timestamp).toLocaleString() : '';
-        const nums = Array.isArray(r.numbers) ? r.numbers.map(n => n === null ? '-' : n).join(' - ') : '';
+        const nums = Array.isArray(r.numbers) ? r.numbers.map(n => n===null?'-':n).join(' - ') : '';
         d.innerHTML = `<div><strong>${nums}</strong></div><div class="small">${ts}</div>`;
         savedList.appendChild(d);
       });
@@ -173,7 +149,6 @@ async function loadSaved() {
   }
 }
 
-selectRow(0);
 loadSaved();
 </script>
 </body>
