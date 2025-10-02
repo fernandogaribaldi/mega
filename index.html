@@ -1,0 +1,197 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width,initial-scale=1" />
+<title>Coleta de 6 Números</title>
+<style>
+  body { font-family: Arial,Helvetica,sans-serif; margin:16px; background:#f5f6f8; color:#222 }
+  h1 { font-size:1.2rem; margin-bottom:8px }
+  .grid { display:grid; gap:6px; margin-bottom:12px }
+  .row { display:flex; gap:6px; align-items:center }
+  input[type=number] { width:48px; padding:6px; border-radius:6px; border:1px solid #ccc; text-align:center }
+  button { padding:8px 12px; border-radius:8px; border:0; background:#0b5cff; color:#fff; cursor:pointer }
+  button.secondary { background:#666 }
+  .saved { margin-top:18px; padding:12px; background:#fff; border-radius:8px; min-height:60px; color:#000 }
+  .entry { padding:6px 0; border-bottom:1px solid #eee }
+  .small { font-size:0.85rem; color:#444 }
+  .message { margin-top:8px; font-size:0.95rem }
+  @media (max-width:420px){
+    input[type=number]{ width:42px; padding:8px }
+  }
+</style>
+</head>
+<body>
+  <h1>Preencha 6 números (1–60)</h1>
+  <p class="small">Escolha uma linha e coloque 6 números (sem repetição nessa linha). Em seguida, pressione <strong>Enviar</strong>. Estes dados ficam salvos na planilha do responsável e aparecerão abaixo para todos verem.</p>
+
+  <div id="matrix" class="grid"></div>
+
+  <div style="display:flex;gap:8px;flex-wrap:wrap">
+    <button id="sendSelected">Enviar linha selecionada</button>
+    <button id="clearRow" class="secondary">Limpar linha selecionada</button>
+    <button id="refresh" class="secondary">Atualizar lista</button>
+  </div>
+
+  <div class="message" id="status"></div>
+
+  <h2 style="margin-top:18px">Conjuntos já enviados</h2>
+  <div class="saved" id="savedList">
+    Carregando...
+  </div>
+
+<script>
+const GOOGLE_SCRIPT_URL = "GOOGLE_SCRIPT_URL"; // <-- substitua por sua URL do Web App (ex: https://script.google.com/macros/s/XXX/exec)
+
+const matrix = document.getElementById('matrix');
+const savedList = document.getElementById('savedList');
+const status = document.getElementById('status');
+
+let selectedRowIndex = 0;
+
+// criar 10 linhas com 6 inputs
+for (let r=0;r<10;r++) {
+  const div = document.createElement('div');
+  div.className = 'row';
+  div.dataset.row = r;
+  for (let c=0;c<6;c++) {
+    const inp = document.createElement('input');
+    inp.type = 'number';
+    inp.min = 1; inp.max = 60;
+    inp.placeholder = (c+1);
+    inp.dataset.col = c;
+    inp.addEventListener('input', () => {
+      // limitar valores
+      if (inp.value) {
+        let v = Math.floor(Number(inp.value));
+        if (isNaN(v)) v = "";
+        if (v !== "") {
+          if (v < 1) v = 1;
+          if (v > 60) v = 60;
+          inp.value = v;
+        }
+      }
+    });
+    div.appendChild(inp);
+  }
+  // botão selecionar linha
+  const btnSel = document.createElement('button');
+  btnSel.textContent = 'Selecionar';
+  btnSel.type = 'button';
+  btnSel.style.marginLeft = '8px';
+  btnSel.addEventListener('click', () => {
+    selectRow(r);
+  });
+  div.appendChild(btnSel);
+  matrix.appendChild(div);
+}
+
+// seleciona linha visualmente
+function selectRow(idx) {
+  selectedRowIndex = idx;
+  document.querySelectorAll('.row').forEach((el,i)=>{
+    el.style.background = (i===idx) ? '#e8f0ff' : 'transparent';
+    el.style.padding = (i===idx) ? '8px' : '';
+    el.style.borderRadius = (i===idx) ? '8px' : '';
+  });
+}
+
+// pegar valores da linha selecionada
+function getSelectedNumbers() {
+  const row = document.querySelector(`.row[data-row="${selectedRowIndex}"]`);
+  const inputs = Array.from(row.querySelectorAll('input'));
+  const values = inputs.map(i => i.value.trim()).filter(v => v !== "").map(v => Number(v));
+  return { inputs, values };
+}
+
+// validar
+function validateNumbers(nums) {
+  if (nums.length !== 6) return "Preencha exatamente 6 números nessa linha.";
+  for (let n of nums) {
+    if (!Number.isInteger(n) || n < 1 || n > 60) return "Números devem ser inteiros entre 1 e 60.";
+  }
+  // verificar repetidos
+  const set = new Set(nums);
+  if (set.size !== nums.length) return "Não pode haver números repetidos na mesma linha.";
+  return null;
+}
+
+// enviar para Google Script
+async function postNumbers(nums) {
+  try {
+    setStatus("Enviando...");
+    const res = await fetch(GOOGLE_SCRIPT_URL, {
+      method: 'POST',
+      headers: {'Content-Type':'application/json'},
+      body: JSON.stringify({numbers: nums})
+    });
+    const j = await res.json();
+    if (j.success) {
+      setStatus("Enviado com sucesso.", 'ok');
+      // limpar inputs da linha
+      const {inputs} = getSelectedNumbers();
+      inputs.forEach(i => i.value = '');
+      loadSaved();
+    } else {
+      setStatus("Erro: " + (j.error || 'resposta inesperada'));
+    }
+  } catch (err) {
+    setStatus("Erro de rede: " + err.message);
+  }
+}
+
+function setStatus(txt, type){
+  status.textContent = txt;
+  status.style.color = type === 'ok' ? 'green' : '#333';
+}
+
+// botões
+document.getElementById('sendSelected').addEventListener('click', ()=>{
+  const {values} = getSelectedNumbers();
+  const err = validateNumbers(values);
+  if (err) {
+    setStatus(err);
+    return;
+  }
+  postNumbers(values);
+});
+document.getElementById('clearRow').addEventListener('click', ()=>{
+  const {inputs} = getSelectedNumbers();
+  inputs.forEach(i=>i.value='');
+});
+document.getElementById('refresh').addEventListener('click', loadSaved);
+
+// carregar já salvos via GET
+async function loadSaved() {
+  savedList.innerHTML = 'Carregando...';
+  try {
+    const res = await fetch(GOOGLE_SCRIPT_URL);
+    const j = await res.json();
+    if (j.success) {
+      const rows = j.rows || [];
+      if (rows.length === 0) {
+        savedList.innerHTML = '<div class="small">Nenhum conjunto enviado ainda.</div>';
+        return;
+      }
+      savedList.innerHTML = '';
+      rows.forEach(r=>{
+        const d = document.createElement('div');
+        d.className = 'entry';
+        const ts = new Date(r.timestamp).toLocaleString();
+        d.innerHTML = `<div><strong>${r.numbers ? r.numbers.join(' - ') : (r.numbers || '').toString()}</strong></div><div class="small">${ts}</div>`;
+        savedList.appendChild(d);
+      });
+    } else {
+      savedList.innerHTML = '<div class="small">Erro ao carregar: ' + (j.error || 'resposta inválida') + '</div>';
+    }
+  } catch (err) {
+    savedList.innerHTML = '<div class="small">Erro de rede: ' + err.message + '</div>';
+  }
+}
+
+// inicialização
+selectRow(0);
+loadSaved();
+</script>
+</body>
+</html>
