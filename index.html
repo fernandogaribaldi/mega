@@ -1,155 +1,136 @@
-<!doctype html>
+<!DOCTYPE html>
 <html lang="pt-BR">
 <head>
-<meta charset="utf-8" />
-<meta name="viewport" content="width=device-width,initial-scale=1" />
-<title>Escolha seus 6 números</title>
-<style>
-  body { font-family: Arial, sans-serif; margin:16px; background:#f5f6f8; color:#222 }
-  h1 { font-size:1.3rem; margin-bottom:12px }
-  .grid { display:grid; grid-template-columns: repeat(10, 1fr); gap:6px; max-width:480px; margin-bottom:16px }
-  .num-btn {
-    padding:10px; border:1px solid #aaa; border-radius:6px; background:#fff; cursor:pointer;
-    font-size:1rem; text-align:center; user-select:none;
-  }
-  .num-btn.selected { background:#0b5cff; color:#fff; border-color:#0b5cff }
-  button { padding:10px 16px; border-radius:8px; border:0; cursor:pointer; margin:4px 4px 0 0 }
-  button.send { background:#0b5cff; color:#fff }
-  button.secondary { background:#666; color:#fff }
-  .saved { margin-top:18px; padding:12px; background:#fff; border-radius:8px; min-height:60px; color:#000 }
-  .entry { padding:6px 0; border-bottom:1px solid #eee }
-  .small { font-size:0.85rem; color:#444 }
-  .message { margin-top:8px; font-size:0.95rem }
-</style>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Escolha seus números</title>
+  <style>
+    body {
+      font-family: Arial, sans-serif;
+      text-align: center;
+      background-color: #f5f5f5;
+      margin: 0;
+      padding: 20px; /* 🔹 mais recuo das bordas */
+    }
+    h1 {
+      margin-bottom: 20px;
+    }
+    .grid {
+      display: grid;
+      grid-template-columns: repeat(10, 1fr);
+      gap: 12px; /* 🔹 mais espaço entre botões */
+      margin: 0 auto 20px;
+      max-width: 95vw;
+    }
+    .grid button {
+      padding: 12px;
+      font-size: 16px;
+      border: 2px solid #007BFF;
+      border-radius: 8px;
+      background-color: white;
+      cursor: pointer;
+      transition: all 0.2s ease;
+    }
+    .grid button.selected {
+      background-color: #007BFF;
+      color: white;
+    }
+    .grid button:active {
+      transform: scale(0.95);
+    }
+    #submit {
+      margin-top: 25px;
+      padding: 14px 22px;
+      font-size: 18px;
+      border: none;
+      border-radius: 10px;
+      background-color: #28a745;
+      color: white;
+      cursor: pointer;
+      transition: background 0.2s;
+    }
+    #submit:disabled {
+      background-color: #ccc;
+      cursor: not-allowed;
+    }
+    #results {
+      margin-top: 40px;
+      text-align: left;
+      max-width: 600px;
+      margin-left: auto;
+      margin-right: auto;
+    }
+  </style>
 </head>
 <body>
-  <h1>Escolha 6 números (1–60)</h1>
-  <div id="matrix" class="grid"></div>
+  <h1>Escolha 6 números</h1>
+  <div class="grid" id="grid"></div>
+  <button id="submit" disabled>Enviar</button>
 
-  <div>
-    <button id="send" class="send">Enviar</button>
-    <button id="clear" class="secondary">Limpar seleção</button>
-    <button id="refresh" class="secondary">Atualizar lista</button>
-  </div>
+  <h2>Conjuntos enviados:</h2>
+  <div id="results"></div>
 
-  <div class="message" id="status"></div>
+  <script>
+    const grid = document.getElementById("grid");
+    const submit = document.getElementById("submit");
+    const resultsDiv = document.getElementById("results");
 
-  <h2 style="margin-top:18px">Conjuntos já enviados</h2>
-  <div class="saved" id="savedList">Carregando...</div>
+    // URL do seu Worker (não altere se já está funcionando)
+    const GOOGLE_SCRIPT_URL = "https://proxy-numeros.fernando-garibaldi.workers.dev/";
 
-<script>
-const GOOGLE_SCRIPT_URL = "https://proxy-numeros.fernando-garibaldi.workers.dev/"; //
+    let selected = [];
 
-const matrix = document.getElementById('matrix');
-const savedList = document.getElementById('savedList');
-const status = document.getElementById('status');
-
-// Criar botões de 1 a 60
-for (let n=1; n<=60; n++) {
-  const btn = document.createElement('div');
-  btn.textContent = n;
-  btn.className = 'num-btn';
-  btn.dataset.num = n;
-  btn.addEventListener('click', ()=>{
-    btn.classList.toggle('selected');
-    enforceMaxSelection();
-  });
-  matrix.appendChild(btn);
-}
-
-// Garante no máximo 6 selecionados
-function enforceMaxSelection() {
-  const selected = getSelectedNumbers();
-  if (selected.length > 6) {
-    // desmarca o último clicado
-    const last = document.querySelector('.num-btn.selected:last-of-type');
-    if (last) last.classList.remove('selected');
-    setStatus("Você só pode escolher 6 números.");
-  } else {
-    setStatus("");
-  }
-}
-
-function getSelectedNumbers() {
-  return Array.from(document.querySelectorAll('.num-btn.selected')).map(b=>Number(b.dataset.num));
-}
-
-function clearSelection() {
-  document.querySelectorAll('.num-btn').forEach(b=>b.classList.remove('selected'));
-}
-
-function validateNumbers(nums) {
-  if (nums.length !== 6) return "Escolha exatamente 6 números.";
-  const set = new Set(nums);
-  if (set.size !== nums.length) return "Números repetidos não são permitidos.";
-  return null;
-}
-
-async function postNumbers(nums) {
-  try {
-    setStatus("Enviando...");
-    const res = await fetch(GOOGLE_SCRIPT_URL, {
-      method: 'POST',
-      headers: {'Content-Type':'application/json'},
-      body: JSON.stringify({numbers: nums})
-    });
-    const j = await res.json();
-    if (j && j.success) {
-      setStatus("Enviado com sucesso!", 'ok');
-      clearSelection();
-      loadSaved();
-    } else {
-      setStatus("Erro: " + (j && j.error ? j.error : 'resposta inesperada'));
+    // Criar botões 1 a 60
+    for (let i = 1; i <= 60; i++) {
+      const btn = document.createElement("button");
+      btn.textContent = i;
+      btn.value = i;
+      btn.addEventListener("click", () => toggleNumber(btn));
+      grid.appendChild(btn);
     }
-  } catch (err) {
-    setStatus("Erro de rede: " + err.message);
-  }
-}
 
-function setStatus(txt, type){
-  status.textContent = txt;
-  status.style.color = type === 'ok' ? 'green' : '#333';
-}
-
-document.getElementById('send').addEventListener('click', ()=>{
-  const nums = getSelectedNumbers();
-  const err = validateNumbers(nums);
-  if (err) { setStatus(err); return; }
-  postNumbers(nums);
-});
-
-document.getElementById('clear').addEventListener('click', clearSelection);
-document.getElementById('refresh').addEventListener('click', loadSaved);
-
-async function loadSaved() {
-  savedList.innerHTML = 'Carregando...';
-  try {
-    const res = await fetch(GOOGLE_SCRIPT_URL, { method: 'GET' });
-    const j = await res.json();
-    if (j && j.success) {
-      const rows = j.rows || [];
-      if (rows.length === 0) {
-        savedList.innerHTML = '<div class="small">Nenhum conjunto enviado ainda.</div>';
-        return;
+    function toggleNumber(btn) {
+      const num = parseInt(btn.value);
+      if (selected.includes(num)) {
+        selected = selected.filter(n => n !== num);
+        btn.classList.remove("selected");
+      } else {
+        if (selected.length < 6) {
+          selected.push(num);
+          btn.classList.add("selected");
+        } else {
+          alert("Você só pode escolher 6 números!");
+        }
       }
-      savedList.innerHTML = '';
-      rows.forEach(r=>{
-        const d = document.createElement('div');
-        d.className = 'entry';
-        const ts = r.timestamp ? new Date(r.timestamp).toLocaleString() : '';
-        const nums = Array.isArray(r.numbers) ? r.numbers.map(n => n===null?'-':n).join(' - ') : '';
-        d.innerHTML = `<div><strong>${nums}</strong></div><div class="small">${ts}</div>`;
-        savedList.appendChild(d);
-      });
-    } else {
-      savedList.innerHTML = '<div class="small">Erro ao carregar: ' + (j && j.error ? j.error : 'resposta inválida') + '</div>';
+      submit.disabled = selected.length !== 6;
     }
-  } catch (err) {
-    savedList.innerHTML = '<div class="small">Erro de rede: ' + err.message + '</div>';
-  }
-}
 
-loadSaved();
-</script>
+    async function loadResults() {
+      const res = await fetch(GOOGLE_SCRIPT_URL);
+      const data = await res.json();
+      resultsDiv.innerHTML = "";
+      if (data && data.length > 0) {
+        data.forEach(row => {
+          const div = document.createElement("div");
+          div.textContent = row.join(", ");
+          resultsDiv.appendChild(div);
+        });
+      }
+    }
+
+    submit.addEventListener("click", async () => {
+      await fetch(GOOGLE_SCRIPT_URL, {
+        method: "POST",
+        body: JSON.stringify({ numbers: selected })
+      });
+      selected = [];
+      document.querySelectorAll(".grid button").forEach(btn => btn.classList.remove("selected"));
+      submit.disabled = true;
+      loadResults();
+    });
+
+    // Carregar resultados ao abrir
+    loadResults();
+  </script>
 </body>
 </html>
