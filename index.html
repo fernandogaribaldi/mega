@@ -121,10 +121,12 @@ async function postNumbers(nums) {
   try {
     setStatus("Enviando...");
     const res = await fetch(GOOGLE_SCRIPT_URL, {
-      method: 'POST',
-      headers: {'Content-Type':'application/json'},
-      body: JSON.stringify({numbers: nums})
-    });
+  method: 'POST',
+  mode: 'no-cors',  // 👈 adiciona isso
+  headers: {'Content-Type':'application/json'},
+  body: JSON.stringify({numbers: nums})
+});
+
     const j = await res.json();
     if (j.success) {
       setStatus("Enviado com sucesso.", 'ok');
